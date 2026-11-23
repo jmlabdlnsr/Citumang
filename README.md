@@ -30,6 +30,67 @@ npm start
 Font disimpan lokal; build tidak memerlukan Google Fonts.
 `npm run build` juga memeriksa TypeScript.
 
+## PostgreSQL Lokal
+
+Docker Desktop dibutuhkan untuk menjalankan database lokal.
+
+```powershell
+docker compose up -d
+docker compose ps
+docker compose logs postgres
+```
+
+Salin `.env.example` menjadi `.env.local` jika koneksi database digunakan
+oleh aplikasi Next.js:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Kredensial lokal:
+
+- Database: `citumang`
+- User: `citumang`
+- Password: `citumang-local`
+- Host: `localhost`
+- Port: `5432`
+
+Data PostgreSQL disimpan pada Docker volume `citumang-postgres-data` sehingga
+tetap tersedia saat container di-restart atau dibuat ulang.
+
+## Database Schema
+
+Drizzle ORM digunakan untuk schema dan migration PostgreSQL.
+
+```powershell
+npm.cmd run db:generate
+npm.cmd run db:push
+npm.cmd run db:studio
+```
+
+Tabel awal mencakup pengguna admin, paket wisata, harga, galeri aset
+Cloudinary, artikel bilingual, dan reservasi.
+
+## Login Admin Lokal
+
+Setelah PostgreSQL aktif, buat akun admin awal:
+
+```powershell
+Copy-Item .env.example .env.local
+npm.cmd run db:seed
+npm.cmd run dev
+```
+
+Buka `http://localhost:3000/admin/login`.
+
+Default seed hanya untuk pengembangan:
+
+- Email: `admin@citumang.local`
+- Password: `citumang123`
+
+Ganti `ADMIN_SEED_*` pada `.env.local` sebelum menjalankan seed. Isi tiga
+nilai Cloudinary pada `.env.local` sebelum mengunggah foto.
+
 ## Isi Beranda
 
 - Profil usaha dan jasa Citumang.
