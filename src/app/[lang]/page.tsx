@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import HomePage from "@/components/home-page";
 import { isLocale, messages } from "@/lib/messages";
+import {
+  getPublicPackages,
+  getPublicGallery,
+  getPublicArticles,
+  getPublicFaq,
+} from "@/lib/queries";
 
 export async function generateMetadata({
   params,
@@ -28,5 +35,23 @@ export default async function Home({
 }: PageProps<"/[lang]">) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
-  return <HomePage locale={lang} />;
+
+  // Fetch semua data dari DB secara paralel
+  await connection();
+  const [dbPackages, dbGallery, dbArticles, dbFaq] = await Promise.all([
+    getPublicPackages(),
+    getPublicGallery(),
+    getPublicArticles(6),
+    getPublicFaq(),
+  ]);
+
+  return (
+    <HomePage
+      locale={lang}
+      dbPackages={dbPackages}
+      dbGallery={dbGallery}
+      dbArticles={dbArticles}
+      dbFaq={dbFaq}
+    />
+  );
 }

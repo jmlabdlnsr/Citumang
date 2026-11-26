@@ -12,6 +12,39 @@ import {
 import { messages, type Locale } from "@/lib/messages";
 import { site } from "@/lib/site";
 import { Brand, Icon } from "./icon";
+import type {
+  PublicPackage,
+  PublicGalleryItem,
+  PublicArticle,
+  PublicFaq,
+} from "@/lib/queries";
+
+// ─── Unified display types (DB ↔ static fallback) ────────────────────────────
+type DisplayPkg = {
+  key: string;
+  name: string;
+  category: string;
+  description: string;
+  coverSrc: string | null;
+  coverAlt: string;
+  detailText: string;
+  features: string[];
+};
+type DisplayGalleryPic = {
+  key: string;
+  src: string | null;
+  alt: string;
+  label: string;
+  location: string;
+};
+type DisplayArt = {
+  key: string;
+  title: string;
+  category: string;
+  text: string;
+  coverSrc: string | null;
+};
+type DisplayFaqItem = { key: string; question: string; answer: string };
 
 type Overlay =
   | { kind: "reservation" }
@@ -79,6 +112,9 @@ function Reservation({ locale }: { locale: Locale }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState("");
+  const [kodeReservasi, setKodeReservasi] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const peopleRef = useRef<HTMLInputElement>(null);
@@ -89,12 +125,11 @@ function Reservation({ locale }: { locale: Locale }) {
     day: "2-digit",
   }).format(new Date());
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = t.nameRequired;
-    if (!date || date < today)
-      next.date = t.dateInvalid;
+    if (!date || date < today) next.date = t.dateInvalid;
     if (!/^\d+$/.test(people) || Number(people) < 1 || Number(people) > 200)
       next.people = t.peopleInvalid;
     setErrors(next);
@@ -102,11 +137,35 @@ function Reservation({ locale }: { locale: Locale }) {
       (next.name ? nameRef : next.date ? dateRef : peopleRef).current?.focus();
       return;
     }
-    const formatted = new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", {
-      dateStyle: "long",
-      timeZone: "Asia/Jakarta",
-    }).format(new Date(`${date}T12:00:00+07:00`));
-    setMessage(t.message(name.trim(), people, formatted));
+
+    setSubmitting(true);
+    setApiError("");
+    try {
+      const res = await fetch("/api/reservasi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guestName: name.trim(),
+          visitDate: date,
+          guestCount: Number(people),
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { kodeReservasi: string };
+        setKodeReservasi(data.kodeReservasi);
+        const formatted = new Intl.DateTimeFormat(
+          locale === "id" ? "id-ID" : "en-US",
+          { dateStyle: "long", timeZone: "Asia/Jakarta" },
+        ).format(new Date(`${date}T12:00:00+07:00`));
+        setMessage(t.message(name.trim(), people, formatted));
+      } else {
+        setApiError(t.apiError);
+      }
+    } catch {
+      setApiError(t.apiError);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -121,6 +180,17 @@ function Reservation({ locale }: { locale: Locale }) {
       )}
       {message ? (
         <div className="[&_h3]:[font-size:18px] [&_h3]:[margin:24px_0_12px]">
+          {kodeReservasi && (
+            <div className="[padding:14px_18px] [background:#f0faf4] [border:1px_solid_#86efac] [border-radius:10px] [margin-bottom:18px]">
+              <p className="[font-size:11px] [font-weight:700] [color:#166534] [margin-bottom:4px]">
+                {t.kodeLabel}
+              </p>
+              <p className="[font-size:20px] [font-weight:700] [letter-spacing:0.1em] [color:#15803d] [font-family:monospace]">
+                {kodeReservasi}
+              </p>
+              <p className="[font-size:10px] [color:#166534] [margin-top:4px]">{t.success}</p>
+            </div>
+          )}
           <h3>{t.messageReady}</h3>
           <p className="[padding:18px] [background:var(--soft)] [border-radius:12px] [font-size:13px] [line-height:1.9] [user-select:text]">{message}</p>
           <p className="[color:var(--muted)] [font-size:10px] [line-height:1.8] [margin:14px_0]">
@@ -158,6 +228,7 @@ function Reservation({ locale }: { locale: Locale }) {
               onClick={() => {
                 setMessage("");
                 setCopied("");
+                setKodeReservasi("");
               }}
             >
               {t.editPlan}
@@ -233,9 +304,12 @@ function Reservation({ locale }: { locale: Locale }) {
               )}
             </div>
           </div>
-          <button className="[display:inline-flex] [align-items:center] [justify-content:center] [gap:12px] [padding:14px_22px] [border-radius:var(--radius-control)] [font-size:12px] [line-height:1.5] [font-weight:700] [min-height:46px] [transition:background_0.2s,_transform_0.2s,_box-shadow_0.2s] [white-space:nowrap] [cursor:pointer] [&:hover]:[transform:translateY(-2px)] [&:active]:[transform:translateY(0)] forced-colors:[border:1px_solid_ButtonText] [background:var(--primary)] [color:white] [&:hover]:[background:var(--primary-hover)] [&:hover]:[box-shadow:0_6px_18px_#d8784225] [margin-top:25px] [width:100%]" type="submit">
-            {t.submit} <Icon name="chat" />
+          <button className="[display:inline-flex] [align-items:center] [justify-content:center] [gap:12px] [padding:14px_22px] [border-radius:var(--radius-control)] [font-size:12px] [line-height:1.5] [font-weight:700] [min-height:46px] [transition:background_0.2s,_transform_0.2s,_box-shadow_0.2s] [white-space:nowrap] [cursor:pointer] [&:hover]:[transform:translateY(-2px)] [&:active]:[transform:translateY(0)] forced-colors:[border:1px_solid_ButtonText] [background:var(--primary)] [color:white] [&:hover]:[background:var(--primary-hover)] [&:hover]:[box-shadow:0_6px_18px_#d8784225] [margin-top:25px] [width:100%] disabled:[opacity:0.6] disabled:[cursor:not-allowed]" type="submit" disabled={submitting}>
+            {submitting ? t.submitting : t.submit} <Icon name="chat" />
           </button>
+          {apiError && (
+            <p className="[color:#b42318] [font-size:11px] [margin-top:10px]" role="alert">{apiError}</p>
+          )}
           <p className="[color:var(--muted)] [font-size:10px] [line-height:1.8] [margin:14px_0]">
             {t.disclaimer}
           </p>
@@ -251,13 +325,102 @@ const primaryAction = "inline-flex items-center justify-center gap-2 rounded-ful
 const heroAction = "inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-8 py-4 text-sm font-semibold text-white shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#f5b27d]";
 const floatingWhatsAppStyle = "fixed bottom-5 right-5 z-40 grid size-14 place-items-center rounded-full bg-[#25D366] text-white shadow-xl shadow-black/25 transition hover:-translate-y-0.5 hover:bg-[#20b858] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#128c4a]";
 
-export default function HomePage({ locale }: { locale: Locale }) {
+export default function HomePage({
+  locale,
+  dbPackages,
+  dbGallery,
+  dbArticles,
+  dbFaq,
+}: {
+  locale: Locale;
+  dbPackages: PublicPackage[];
+  dbGallery: PublicGalleryItem[];
+  dbArticles: PublicArticle[];
+  dbFaq: PublicFaq[];
+}) {
   const router = useRouter();
   const t = messages[locale];
   const { photos } = t;
   const experiences = t.packages.experiences;
   const articles = t.articles.items;
   const { navigation } = t;
+
+  // ─── Unified display arrays (DB data → display, with static fallback) ───────
+  const displayPkgs: DisplayPkg[] =
+    dbPackages.length > 0
+      ? dbPackages.map((p) => ({
+          key: p.slug,
+          name: locale === "id" ? p.nameId : p.nameEn,
+          category: locale === "id" ? "Paket Wisata" : "Tour Package",
+          description:
+            (locale === "id" ? p.descriptionId : p.descriptionEn) ?? "",
+          coverSrc: p.coverUrl,
+          coverAlt: locale === "id" ? p.nameId : p.nameEn,
+          detailText:
+            (locale === "id" ? p.descriptionId : p.descriptionEn) ?? "",
+          features: p.fasilitas,
+        }))
+      : experiences.map((item) => ({
+          key: item.title,
+          name: item.title,
+          category: item.category,
+          description: item.description,
+          coverSrc: photos[item.photo].src,
+          coverAlt: photos[item.photo].alt,
+          detailText: item.details,
+          features: [...item.notes],
+        }));
+
+  const displayGallery: DisplayGalleryPic[] =
+    dbGallery.length > 0
+      ? dbGallery.map((item) => ({
+          key: String(item.id),
+          src: item.imageUrl,
+          alt: locale === "id" ? item.altId : item.altEn,
+          label: locale === "id" ? item.titleId : item.titleEn,
+          location: locale === "id" ? item.titleId : item.titleEn,
+        }))
+      : photos.map((photo) => ({
+          key: photo.src,
+          src: photo.src,
+          alt: photo.alt,
+          label: photo.label,
+          location: photo.location,
+        }));
+
+  const displayArticles: DisplayArt[] =
+    dbArticles.length > 0
+      ? dbArticles.map((a) => ({
+          key: a.slug,
+          title: locale === "id" ? a.titleId : a.titleEn,
+          category:
+            (locale === "id" ? a.kategoriNamaId : a.kategoriNamaEn) ??
+            (locale === "id" ? "Artikel" : "Article"),
+          text:
+            (locale === "id" ? a.excerptId : a.excerptEn) ?? "",
+          coverSrc: a.coverUrl,
+        }))
+      : articles.map((a) => ({
+          key: a.title,
+          title: a.title,
+          category: a.category,
+          text: a.text,
+          coverSrc: photos[a.photo]?.src ?? null,
+        }));
+
+  const displayFaq: DisplayFaqItem[] =
+    dbFaq.length > 0
+      ? dbFaq.map((item) => ({
+          key: String(item.id),
+          question:
+            locale === "id" ? item.pertanyaanId : item.pertanyaanEn,
+          answer: locale === "id" ? item.jawabanId : item.jawabanEn,
+        }))
+      : t.information.faq.map((item) => ({
+          key: item.question,
+          question: item.question,
+          answer: item.answer,
+        }));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [active, setActive] = useState<string>(navigation[0].href);
   const [navScrolled, setNavScrolled] = useState(false);
@@ -403,7 +566,7 @@ export default function HomePage({ locale }: { locale: Locale }) {
             src={photos[0].src}
             alt={photos[0].alt}
             fill
-            priority
+            loading="eager"
             sizes="100vw"
           />
           <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#10251f]/55 via-[#10251f]/25 to-[#10251f]/50" />
@@ -506,19 +669,23 @@ export default function HomePage({ locale }: { locale: Locale }) {
               </p>
             </div>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {experiences.map((item, index) => (
-                <article key={item.title} className="overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-black/5 transition hover:-translate-y-1 hover:shadow-xl">
+              {displayPkgs.map((item, index) => (
+                <article key={item.key} className="overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-black/5 transition hover:-translate-y-1 hover:shadow-xl">
                   <button
                     className="group relative block h-56 w-full overflow-hidden text-left"
                     onClick={() => setOverlay({ kind: "experience", index })}
-                    aria-label={`${t.packages.openDetails} ${item.title}`}
+                    aria-label={`${t.packages.openDetails} ${item.name}`}
                   >
-                    <Image src={photos[item.photo].src} alt={photos[item.photo].alt} fill sizes="(max-width: 700px) 100vw, 400px" className="object-cover transition duration-700 group-hover:scale-105" />
+                    {item.coverSrc ? (
+                      <Image src={item.coverSrc} alt={item.coverAlt} fill sizes="(max-width: 700px) 100vw, 400px" className="object-cover transition duration-700 group-hover:scale-105" />
+                    ) : (
+                      <Image src={photos[0].src} alt={photos[0].alt} fill sizes="(max-width: 700px) 100vw, 400px" className="object-cover transition duration-700 group-hover:scale-105" />
+                    )}
                     <span className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
                     <span className="absolute bottom-4 left-5 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#35433c]">{item.category}</span>
                   </button>
                   <div className="p-6">
-                    <h3 className="text-xl font-semibold text-[var(--foreground)]">{item.title}</h3>
+                    <h3 className="text-xl font-semibold text-[var(--foreground)]">{item.name}</h3>
                     <p className="mt-3 min-h-12 text-sm leading-6 text-[var(--muted)]">{item.description}</p>
                     <div className="mt-6 flex items-center justify-between gap-3 border-t border-[var(--line)] pt-5">
                       <button className="text-sm font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)]" onClick={() => setOverlay({ kind: "experience", index })}>
@@ -545,14 +712,14 @@ export default function HomePage({ locale }: { locale: Locale }) {
               <span className="hidden text-sm text-[var(--muted)] sm:inline">{t.gallery.hint}</span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-              {photos.map((photo, index) => (
+              {displayGallery.map((photo, index) => (
                 <button
-                  key={photo.src}
+                  key={photo.key}
                   className={`group relative overflow-hidden rounded-2xl text-left ${index === 0 ? "col-span-2 aspect-[1.7] lg:col-span-1 lg:aspect-[0.95]" : "aspect-[0.95]"}`}
                   onClick={() => setOverlay({ kind: "gallery", index })}
                   aria-label={`${t.gallery.openPhoto} ${photo.location}`}
                 >
-                  <Image src={photo.src} alt={photo.alt} fill sizes="(max-width: 700px) 50vw, 400px" className="object-cover transition duration-700 group-hover:scale-105" />
+                  {photo.src && <Image src={photo.src} alt={photo.alt} fill sizes="(max-width: 700px) 50vw, 400px" className="object-cover transition duration-700 group-hover:scale-105" />}
                   <span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   <span className="absolute bottom-4 left-4 text-sm font-semibold text-white sm:bottom-6 sm:left-6 sm:text-base">{photo.label}</span>
                 </button>
@@ -571,8 +738,8 @@ export default function HomePage({ locale }: { locale: Locale }) {
               <p className="max-w-sm text-sm leading-6 text-[var(--muted)]">{t.articles.description}</p>
             </div>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {articles.map((article, index) => (
-                <article key={article.title} className="flex min-h-[280px] flex-col rounded-[1.5rem] border border-[var(--line)] bg-[#fbfbf8] p-6 sm:p-7">
+              {displayArticles.map((article, index) => (
+                <article key={article.key} className="flex min-h-[280px] flex-col rounded-[1.5rem] border border-[var(--line)] bg-[#fbfbf8] p-6 sm:p-7">
                   <div className="mb-7 flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--primary)]">{article.category}</span>
                     <span className="text-2xl font-light text-[#c8cec5]">0{index + 1}</span>
@@ -608,8 +775,8 @@ export default function HomePage({ locale }: { locale: Locale }) {
               </div>
             </div>
             <div className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
-              {t.information.faq.map(({ question, answer }) => (
-                <details key={question} className="group py-5">
+              {displayFaq.map(({ key, question, answer }) => (
+                <details key={key} className="group py-5">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-5 text-base font-semibold text-[var(--foreground)] marker:hidden">
                     {question}
                     <Icon name="chevron" className="shrink-0 text-[var(--primary)] transition-transform group-open:rotate-180" width="18" height="18" />
@@ -687,10 +854,10 @@ export default function HomePage({ locale }: { locale: Locale }) {
             overlay.kind === "reservation"
               ? t.reservation.title
               : overlay.kind === "gallery"
-                ? photos[overlay.index].label
+                ? (displayGallery[overlay.index]?.label ?? "")
                 : overlay.kind === "experience"
-                  ? experiences[overlay.index].title
-                  : articles[overlay.index].title
+                  ? (displayPkgs[overlay.index]?.name ?? "")
+                  : (displayArticles[overlay.index]?.title ?? "")
           }
           onClose={close}
           closeLabel={t.accessibility.closeDialog}
@@ -700,26 +867,28 @@ export default function HomePage({ locale }: { locale: Locale }) {
           {overlay.kind === "gallery" && (
             <div className="p-5">
               <div className="relative h-[min(60vw,520px)] overflow-hidden rounded-xl bg-[#10251f]">
-                <Image src={photos[overlay.index].src} alt={photos[overlay.index].alt} fill sizes="(max-width: 700px) 95vw, 900px" className="object-contain" />
+                {displayGallery[overlay.index]?.src && (
+                  <Image src={displayGallery[overlay.index].src!} alt={displayGallery[overlay.index].alt} fill sizes="(max-width: 700px) 95vw, 900px" className="object-contain" />
+                )}
               </div>
               <div className="mt-4 flex items-center justify-between gap-4">
                 <div aria-live="polite">
-                  <p className="font-semibold text-[var(--foreground)]">{photos[overlay.index].location}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{overlay.index + 1} / {photos.length} | {t.gallery.dialogPreview}</p>
+                  <p className="font-semibold text-[var(--foreground)]">{displayGallery[overlay.index]?.location}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{overlay.index + 1} / {displayGallery.length} | {t.gallery.dialogPreview}</p>
                 </div>
                 <div className="flex gap-2">
-                  <button className="grid size-10 place-items-center rounded-full bg-[var(--soft)] text-[var(--foreground)]" aria-label={t.gallery.previousPhoto} onClick={() => setOverlay({ kind: "gallery", index: (overlay.index + photos.length - 1) % photos.length })}>
+                  <button className="grid size-10 place-items-center rounded-full bg-[var(--soft)] text-[var(--foreground)]" aria-label={t.gallery.previousPhoto} onClick={() => setOverlay({ kind: "gallery", index: (overlay.index + displayGallery.length - 1) % displayGallery.length })}>
                     <Icon name="arrow" className="rotate-180" />
                   </button>
-                  <button className="grid size-10 place-items-center rounded-full bg-[var(--primary)] text-white" aria-label={t.gallery.nextPhoto} onClick={() => setOverlay({ kind: "gallery", index: (overlay.index + 1) % photos.length })}>
+                  <button className="grid size-10 place-items-center rounded-full bg-[var(--primary)] text-white" aria-label={t.gallery.nextPhoto} onClick={() => setOverlay({ kind: "gallery", index: (overlay.index + 1) % displayGallery.length })}>
                     <Icon name="arrow" />
                   </button>
                 </div>
               </div>
               <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-                {photos.map((photo, index) => (
-                  <button key={photo.src} className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-lg ${overlay.index === index ? "ring-2 ring-[var(--primary)] ring-offset-2" : "opacity-65 hover:opacity-100"}`} aria-label={`${t.gallery.showPhoto} ${photo.location}`} aria-pressed={overlay.index === index} onClick={() => setOverlay({ kind: "gallery", index })}>
-                    <Image src={photo.src} alt="" fill sizes="100px" className="object-cover" />
+                {displayGallery.map((photo, index) => (
+                  <button key={photo.key} className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-lg ${overlay.index === index ? "ring-2 ring-[var(--primary)] ring-offset-2" : "opacity-65 hover:opacity-100"}`} aria-label={`${t.gallery.showPhoto} ${photo.location}`} aria-pressed={overlay.index === index} onClick={() => setOverlay({ kind: "gallery", index })}>
+                    {photo.src && <Image src={photo.src} alt="" fill sizes="100px" className="object-cover" />}
                   </button>
                 ))}
               </div>
@@ -728,23 +897,35 @@ export default function HomePage({ locale }: { locale: Locale }) {
           {overlay.kind === "experience" && (
             <div className="p-6 sm:p-8">
               <div className="relative mb-6 h-56 overflow-hidden rounded-2xl">
-                <Image src={photos[experiences[overlay.index].photo].src} alt={photos[experiences[overlay.index].photo].alt} fill sizes="600px" className="object-cover" />
+                <Image
+                  src={displayPkgs[overlay.index]?.coverSrc ?? photos[0].src}
+                  alt={displayPkgs[overlay.index]?.coverAlt ?? photos[0].alt}
+                  fill sizes="600px" className="object-cover"
+                />
               </div>
-              <p className="text-sm leading-7 text-[var(--muted)]">{experiences[overlay.index].details}</p>
-              <ul className="my-6 space-y-3">
-                {experiences[overlay.index].notes.map((note) => <li className="flex items-start gap-3 text-sm text-[var(--foreground)]" key={note}><Icon name="check" className="mt-0.5 text-[var(--primary)]" width="17" height="17" />{note}</li>)}
-              </ul>
+              <p className="text-sm leading-7 text-[var(--muted)]">{displayPkgs[overlay.index]?.detailText}</p>
+              {(displayPkgs[overlay.index]?.features.length ?? 0) > 0 && (
+                <ul className="my-6 space-y-3">
+                  {displayPkgs[overlay.index].features.map((note) => (
+                    <li className="flex items-start gap-3 text-sm text-[var(--foreground)]" key={note}>
+                      <Icon name="check" className="mt-0.5 text-[var(--primary)]" width="17" height="17" />{note}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p className="mb-5 text-xs leading-5 text-[var(--muted)]">{t.dialogs.activityDetails}</p>
               <button className={primaryAction} onClick={reserve}>{t.dialogs.askAboutActivity} <Icon name="arrow" /></button>
             </div>
           )}
           {overlay.kind === "article" && (
             <div className="p-6 sm:p-8">
-              <div className="relative mb-6 h-56 overflow-hidden rounded-2xl">
-                <Image src={photos[articles[overlay.index].photo].src} alt={photos[articles[overlay.index].photo].alt} fill sizes="600px" className="object-cover" />
-              </div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-[var(--primary)]">{articles[overlay.index].category}</p>
-              <p className="text-sm leading-7 text-[var(--muted)]">{articles[overlay.index].text}</p>
+              {displayArticles[overlay.index]?.coverSrc && (
+                <div className="relative mb-6 h-56 overflow-hidden rounded-2xl">
+                  <Image src={displayArticles[overlay.index].coverSrc!} alt={displayArticles[overlay.index].title} fill sizes="600px" className="object-cover" />
+                </div>
+              )}
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-[var(--primary)]">{displayArticles[overlay.index]?.category}</p>
+              <p className="text-sm leading-7 text-[var(--muted)]">{displayArticles[overlay.index]?.text}</p>
               <button className={`${primaryAction} mt-6`} onClick={close}>{t.dialogs.back} <Icon name="arrow" /></button>
             </div>
           )}

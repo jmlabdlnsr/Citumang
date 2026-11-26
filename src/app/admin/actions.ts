@@ -19,6 +19,13 @@ import {
 } from "@/db/schema";
 import bcrypt from "bcryptjs";
 import { getAdminSession } from "@/lib/auth";
+import {
+  buildPublicUrl,
+  deleteObject,
+  isStorageConfigured,
+  makeObjectKey,
+  uploadObject,
+} from "@/lib/storage";
 
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -138,13 +145,6 @@ export async function toggleArticle(formData: FormData) {
 
 export async function createGalleryItem(formData: FormData) {
   await requireAdmin();
-  if (
-    !process.env.CLOUDINARY_CLOUD_NAME ||
-    !process.env.CLOUDINARY_API_KEY ||
-    !process.env.CLOUDINARY_API_SECRET
-  ) {
-    throw new Error("Konfigurasi Cloudinary belum lengkap");
-  }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -152,31 +152,66 @@ export async function createGalleryItem(formData: FormData) {
   }
 
   const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
   const extension =
     file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "img";
-  const localFileName = `${crypto.randomUUID()}.${extension}`;
-  const localDirectory = path.join(process.cwd(), "public", "uploads", "gallery");
-  await mkdir(localDirectory, { recursive: true });
-  await writeFile(
-    path.join(localDirectory, localFileName),
-    Buffer.from(bytes),
-  );
-  const localUrl = `/uploads/gallery/${localFileName}`;
+  const titleId = z.string().trim().min(2).parse(formData.get("titleId"));
+  const titleEn = z.string().trim().min(2).parse(formData.get("titleEn"));
+  const altId = z.string().trim().min(2).parse(formData.get("altId"));
+  const altEn = z.string().trim().min(2).parse(formData.get("altEn"));
 
-  const upload = await cloudinary.v2.uploader.upload(
-    `data:${file.type};base64,${Buffer.from(bytes).toString("base64")}`,
-    { folder: "citumang/gallery", resource_type: "image" },
-  );
+  // ── Coba upload ke MinIO ──────────────────────────────────────────────────
+  if (isStorageConfigured()) {
+    const objectKey = makeObjectKey("gallery", file.name);
+    const { publicUrl } = await uploadObject(objectKey, buffer, file.type);
 
-  await db.insert(galleryItems).values({
-    titleId: z.string().trim().min(2).parse(formData.get("titleId")),
-    titleEn: z.string().trim().min(2).parse(formData.get("titleEn")),
-    altId: z.string().trim().min(2).parse(formData.get("altId")),
-    altEn: z.string().trim().min(2).parse(formData.get("altEn")),
-    cloudinaryPublicId: upload.public_id,
-    cloudinaryUrl: upload.secure_url,
-    localUrl,
-  });
+    await db.insert(galleryItems).values({
+      titleId,
+      titleEn,
+      altId,
+      altEn,
+      objectKey,
+      localUrl: publicUrl, // simpan URL MinIO di localUrl agar kompatibel dengan UI
+    });
+  } else {
+    // ── Fallback: simpan lokal (dev tanpa MinIO, atau MinIO belum dikonfigurasi) ──
+    const localFileName = `${crypto.randomUUID()}.${extension}`;
+    const localDirectory = path.join(process.cwd(), "public", "uploads", "gallery");
+    await mkdir(localDirectory, { recursive: true });
+    await writeFile(path.join(localDirectory, localFileName), buffer);
+    const localUrl = `/uploads/gallery/${localFileName}`;
+
+    // Coba Cloudinary jika tersedia
+    let cloudinaryPublicId: string | undefined;
+    let cloudinaryUrl: string | undefined;
+    if (
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    ) {
+      try {
+        const upload = await cloudinary.v2.uploader.upload(
+          `data:${file.type};base64,${buffer.toString("base64")}`,
+          { folder: "citumang/gallery", resource_type: "image" },
+        );
+        cloudinaryPublicId = upload.public_id;
+        cloudinaryUrl = upload.secure_url;
+      } catch {
+        // Cloudinary gagal — lanjutkan dengan local saja
+      }
+    }
+
+    await db.insert(galleryItems).values({
+      titleId,
+      titleEn,
+      altId,
+      altEn,
+      cloudinaryPublicId,
+      cloudinaryUrl,
+      localUrl,
+    });
+  }
+
   revalidatePath("/admin/gallery");
   revalidatePath("/admin/dashboard");
 }
@@ -189,14 +224,27 @@ export async function deleteGalleryItem(formData: FormData) {
     .from(galleryItems)
     .where(eq(galleryItems.id, id))
     .limit(1);
+
   if (item) {
-    await cloudinary.v2.uploader.destroy(item.cloudinaryPublicId ?? "");
+    // Hapus dari MinIO jika ada object key
+    if (item.objectKey) {
+      await deleteObject(item.objectKey);
+    }
+
+    // Hapus dari Cloudinary (backward-compat)
+    if (item.cloudinaryPublicId) {
+      await cloudinary.v2.uploader.destroy(item.cloudinaryPublicId ?? "").catch(() => undefined);
+    }
+
+    // Hapus file lokal jika ada
     if (item.localUrl?.startsWith("/uploads/gallery/")) {
       const localPath = path.join(process.cwd(), "public", item.localUrl);
       await unlink(localPath).catch(() => undefined);
     }
+
     await db.delete(galleryItems).where(eq(galleryItems.id, id));
   }
+
   revalidatePath("/admin/gallery");
   revalidatePath("/admin/dashboard");
 }
