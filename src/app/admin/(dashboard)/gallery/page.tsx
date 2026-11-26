@@ -48,7 +48,7 @@ export default async function GalleryPage() {
                     alt={item.altId}
                     className="absolute inset-0 size-full object-cover"
                   />
-                ) : (
+                ) : item.cloudinaryUrl ? (
                   <Image
                     src={item.cloudinaryUrl}
                     alt={item.altId}
@@ -57,7 +57,7 @@ export default async function GalleryPage() {
                     unoptimized
                     className="object-cover"
                   />
-                )}
+                ) : null}
               </div>
               <div className="flex items-center justify-between gap-3 p-4">
                 <div className="min-w-0">

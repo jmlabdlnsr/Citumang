@@ -1,8 +1,8 @@
 // Replace demo details here. WhatsApp uses international digits without + or spaces.
 export const site = {
   name: "Citumang",
-  whatsappNumber: "",
-  phoneDisplay: "+62 8xx-xxxx-xxxx",
+  whatsappNumber: "6282129927664",
+  phoneDisplay: "082129927664",
   email: "halo@citumang.example",
   location: {
     id: "Parigi, Pangandaran, Jawa Barat",

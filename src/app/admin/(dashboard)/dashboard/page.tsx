@@ -20,7 +20,7 @@ export default async function DashboardPage() {
     db
       .select()
       .from(reservations)
-      .where(eq(reservations.status, "new"))
+      .where(eq(reservations.status, "menunggu"))
       .orderBy(desc(reservations.createdAt))
       .limit(5),
   ]);

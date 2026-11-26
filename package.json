@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx --env-file=.env.local scripts/seed-admin.ts"
+    "db:seed": "tsx --env-file=.env.local scripts/seed-admin.ts",
+    "db:seed-data": "tsx --env-file=.env.local scripts/seed-data.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

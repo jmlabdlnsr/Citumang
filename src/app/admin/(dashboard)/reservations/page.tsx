@@ -5,10 +5,10 @@ import { reservations } from "@/db/schema";
 import { updateReservationStatus } from "@/app/admin/actions";
 
 const statuses = [
-  ["new", "Baru"],
-  ["confirmed", "Dikonfirmasi"],
-  ["completed", "Selesai"],
-  ["cancelled", "Dibatalkan"],
+  ["menunggu", "Menunggu"],
+  ["dikonfirmasi", "Dikonfirmasi"],
+  ["selesai", "Selesai"],
+  ["dibatalkan", "Dibatalkan"],
 ] as const;
 
 export default async function ReservationsPage() {
