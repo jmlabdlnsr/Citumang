@@ -11,9 +11,12 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx --env-file=.env.local scripts/seed-admin.ts"
+    "db:seed": "tsx --env-file=.env.local scripts/seed-admin.ts",
+    "db:seed-data": "tsx --env-file=.env.local scripts/seed-data.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1178.0",
+    "@aws-sdk/s3-request-presigner": "^3.1178.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
     "dotenv": "^18.0.10",

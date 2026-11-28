@@ -9,6 +9,8 @@ const nav = [
   { href: "/admin/gallery", label: "Galeri", icon: "□" },
   { href: "/admin/articles", label: "Artikel", icon: "≡" },
   { href: "/admin/reservations", label: "Reservasi", icon: "✓" },
+  { href: "/admin/faq", label: "FAQ", icon: "?" },
+  { href: "/admin/users", label: "Akun Admin", icon: "◎" },
 ];
 
 async function logout() {

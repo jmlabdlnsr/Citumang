@@ -240,6 +240,10 @@ export const messages = {
       dateInvalid: "Pilih tanggal hari ini atau setelahnya.",
       peopleInvalid: "Masukkan jumlah peserta antara 1-200 orang.",
       submit: "Siapkan pesan WhatsApp",
+      submitting: "Mengirim...",
+      apiError: "Gagal mengirim reservasi. Silakan coba lagi.",
+      kodeLabel: "Kode reservasi Anda:",
+      success: "Reservasi berhasil disimpan! Gunakan kode ini untuk konfirmasi.",
       disclaimer:
         "Tidak ada pembayaran pada tahap ini. Harga dan ketersediaan dikonfirmasi langsung dengan pengelola.",
       message: (name: string, people: string, date: string) =>
@@ -491,6 +495,10 @@ export const messages = {
       dateInvalid: "Choose today or a future date.",
       peopleInvalid: "Enter between 1 and 200 visitors.",
       submit: "Prepare WhatsApp message",
+      submitting: "Sending...",
+      apiError: "Failed to submit reservation. Please try again.",
+      kodeLabel: "Your reservation code:",
+      success: "Reservation saved! Use this code for confirmation.",
       disclaimer:
         "No payment is taken at this stage. Confirm prices and availability directly with the local operator.",
       message: (name: string, people: string, date: string) =>
